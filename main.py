@@ -1,4 +1,4 @@
-#Importing the libraries
+# Kirjastojen importtaus
 import nltk
 import numpy
 import tflearn
@@ -9,13 +9,13 @@ import pickle
 from nltk.stem.lancaster import LancasterStemmer
 stemmer = LancasterStemmer()
 
-# Opening the json file, which we use
-with open("intents.json") as file:
+# Avaa json tiedoston käyttöön
+with open("questions.json") as file:
     data = json.load(file)
 
-# Looping trough the data
+# Datan looppaus
 try:
-    # Loading existing model/file if it exist
+    # Lataa olemassa olevan modelin, jos semmoinen löytyy
     with open("data.pickle", "rb") as f:
         words, labels, training, output = pickle.load(f)
 except:
@@ -24,30 +24,30 @@ except:
     docs_x = []
     docs_y = []
 
-    for intent in data["intents"]:
-        for pattern in intent["patterns"]:
+    for questions in data["questions"]:
+        for pattern in questions["patterns"]:
             wrds = nltk.word_tokenize(pattern)
             words.extend(wrds)
             docs_x.append(wrds)
-            docs_y.append(intent["tag"])
+            docs_y.append(questions["tag"])
 
-        if intent["tag"] not in labels:
-            labels.append(intent["tag"])
+        if questions["tag"] not in labels:
+            labels.append(questions["tag"])
 
-    # Ignoring "?" in patterns.
+    # Tarkistaa inputin ja ignooraa kysymysmerkin
     words = [stemmer.stem(w.lower()) for w in words if w != "?"]
 
     # Sort and remove duplicates
     words = sorted(list(set(words)))
     labels = sorted(labels)
 
-# Checking the labels
+# Tarkistaa labelit
     training = []
     output = []
 
     out_empty = [0 for _ in range(len(labels))]
 
-# Checking the patterns if there is the word or there is none
+# Inpustista tarkkailee mitä sanoja on ja mitä ei ole
     for x, doc in enumerate(docs_x):
         bag = []
 
@@ -59,18 +59,18 @@ except:
             else:
                 bag.append(0)
 
-        # Checking the tag row
+        # Tarkistaa mihin tägiin inputti kuuluu
         output_row = out_empty[:]
         output_row[labels.index(docs_y[x])] = 1
 
         training.append(bag)
         output.append(output_row)
 
-    # Taking the lists and changing them into arrays
+    # Listasta muodostaa numeerisen sarjan
     training = numpy.array(training)
     output = numpy.array(output)
 
-    # Opening the data file
+    # Avaa data tiedoston
     with open("data.pickle", "wb") as f:
         pickle.dump((words, labels, training, output), f)
 
@@ -79,17 +79,17 @@ try:
 except:
     tensorflow.reset_default_graph()
 
-    # Getting the probability of the word with the use of neurons in neural network
+    # Todennäköisyydellä valitsee minkä outputin tarjoaa käyttäjälle, neural networking avulla
     net = tflearn.input_data(shape=[None, len(training[0])])
     net = tflearn.fully_connected(net, 8)
     net = tflearn.fully_connected(net, 8)
     net = tflearn.fully_connected(net, len(output[0]), activation='softmax')
     net = tflearn.regression(net)
 
-    # Training the model
+    # Treenaa modelia?
     model = tflearn.DNN(net)
 
-    # Passing the training data and saving it
+    # Muuttaa treenauksen data muotoon ja tallentaa sen
     model.fit(training, output, n_epoch=1000, batch_size=8, show_metric=True)
     model.save("model.tflearn")
 
@@ -97,7 +97,7 @@ except:
 def bag_of_words(s, words):
     bag = [0 for _ in range(len(words))]
 
-    # Getting the list of tokenized words
+    # Tarkistaa inputin sanat ja järjestää ne numero sarjaksi
     s_words = nltk.word_tokenize(s)
     s_words = [stemmer.stem(word.lower()) for word in s_words]
 
@@ -116,13 +116,13 @@ def chat():
         if inp.lower() == "quit":
             break
 
-        # Getting the probability of input. And outputting the highest probability output.
+        # Katsoo tödennäköisyyden inputeista ja valitsee todennäköisimmän outputin.
         results = model.predict([bag_of_words(inp, words)])
         results_index = numpy.argmax(results)
-        # Getting the probability of the tag from intent
+        # Katsoo mihin tägiin inputti kuuluu todennäköisimmin
         tag = labels[results_index]
 
-        # Randomly picks response of the highest probability tag
+        #  Valitsee jonkun outputin valitsemastaan tägistä.
         for tg in data["intents"]:
             if tg['tag'] == tag:
                 responses = tg['responses']
